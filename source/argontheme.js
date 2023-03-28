@@ -1135,12 +1135,15 @@ function highlightJsRender(){
 		if ($(block).hasClass("no-hljs")){
 			return;
 		}
+		const codeRunner = createCodeRunner($(block));
 		$(block).parent().attr("id", randomString());
 		hljs.highlightBlock(block);
 		hljs.lineNumbersBlock(block, {singleLine: true});
 		$(block).parent().addClass("hljs-codeblock");
 		$(block).attr("hljs-codeblock-inner", "");
-		let copyBtnID = "copy_btn_" + randomString();
+		const randomId = randomString();
+		const copyBtnID = "copy_btn_" + randomId;
+		const runBtnID = "run_btn_" + randomId;
 		$(block).parent().append(`<div class="hljs-control hljs-title">
 				<div class="hljs-control-btn hljs-control-toggle-linenumber" tooltip-hide-linenumber="` + __("隐藏行号") + `" tooltip-show-linenumber="` + __("显示行号") + `">
 					<i class="fa fa-list"></i>
@@ -1154,7 +1157,32 @@ function highlightJsRender(){
 				<div class="hljs-control-btn hljs-control-fullscreen" tooltip-fullscreen="` + __("全屏") + `" tooltip-exit-fullscreen="` + __("退出全屏") + `">
 					<i class="fa fa-arrows-alt"></i>
 				</div>
-			</div>`);
+				`
+				+
+				(codeRunner ? 
+				`
+				<div class="hljs-control-btn hljs-control-run" id=` + runBtnID + ` tooltip-run-code="` + __("运行") + `">
+					<i class="fa fa-play"></i>
+				</div>
+				` : '')
+				+
+		`</div>`);
+		if (codeRunner) {
+			$(`#${runBtnID}`).click(() => {
+				let resultBlock = $(block).parent()[0].querySelector('.code-result');
+				if (!resultBlock) {
+					resultBlock = document.createElement('code');
+					resultBlock.className = 'code-result hljs';
+					$(resultBlock).attr("hljs-codeblock-inner", "");
+					$(block).parent()[0].appendChild(resultBlock);
+				}
+				resultBlock.innerText = "Running...";
+				codeRunner.run(getCodeFromBlock($(block).parent()[0])).then(result => {
+					console.log("code result: ", result)
+					resultBlock.innerText = result;
+				})
+			});
+		}	
 		let clipboard = new ClipboardJS("#" + copyBtnID, {
 			text: function(trigger) {
 				return getCodeFromBlock($(block).parent()[0]);
@@ -1395,3 +1423,54 @@ $(document).on("click" , ".search-result-title" , function(){
 	console.log('%cVersion%c' + $("meta[name='theme-version']").attr("content"), 'color:#fff; background: #5e72e4;font-size: 12px;border-radius:5px 0 0 5px;padding:3px 10px 3px 10px;','color:#fff; background: #92a1f4;font-size: 12px;border-radius:0 5px 5px 0;padding:3px 10px 3px 10px;');
 	console.log('%chttps://github.com/solstice23/hexo-theme-argon', 'font-size: 12px;border-radius:5px;padding:3px 10px 3px 10px;border:1px solid #5e72e4;');
 }();
+
+function createCodeRunner(codeBlock) {
+	if (codeBlock.hasClass('rust')) {
+		return new RustCodeRunner();
+	}
+	return null;
+}
+
+class CodeRunner {
+	run(_code) {
+		return new Promise((_, reject) => reject(new Error('Not Implemented')));
+	}
+
+	fetch_with_timeout(url, options, timeout = 6000) {
+        return Promise.race([
+            fetch(url, options),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
+        ]);
+    }
+
+}
+
+class RustCodeRunner extends CodeRunner {
+	url = 'https://play.rust-lang.org/evaluate.json';
+
+	run(code) {
+		return this.fetch_with_timeout(this.url, {
+			headers: {
+				'Content-Type': "application/json",
+			},
+			method: 'POST',
+			mode: 'cors',
+			body: JSON.stringify(this.makeParams(code)),
+		})
+		.then(response => response.json())
+		.then(response => {
+			if (response.result.trim() === '') return "No Output";
+			else return response.result;
+		})
+		.catch(error => "Playground Communication: " + error.message);
+	}
+
+	makeParams(code) {
+		return {
+			version: "nightly",
+			optimize: "0",
+			code,
+			edition: "2021",
+		};
+	}
+}

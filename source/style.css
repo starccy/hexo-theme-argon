@@ -139,6 +139,15 @@ article code:not([hljs-codeblock-inner]){
 article > code:not([hljs-codeblock-inner]) , article > p > code:not([hljs-codeblock-inner]){
 	padding: 2px 3px;
 }
+
+.code-result {
+	padding-top: 22px !important;
+}
+
+.code-result::selection {
+	background-color: rgba(204, 226, 255, 0.2);
+}
+
 article .post-content abbr[title]{
 	text-decoration: none;
 	cursor: help;
